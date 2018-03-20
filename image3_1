@@ -1,0 +1,57 @@
+clear
+clc
+%----------excerise 2------------
+I = imread ( 'coins.png' );
+figure(1)
+imagesc ( I )
+%function 'imagesc' can enlarge the range before 
+%output, it is a kind of linear mapping
+%这个函数很好，会对数据进行缩放再显示，
+%也就是把显示范围自动设置成[min(BW(:)) max(BW(:))]，
+%也就是线性映射。
+figure(2)
+imshow ( I )
+% function 'imshow' can derecitively find the value of BW in gray map(0~255),
+% if the number is larger than 255, it will regard it as 255
+% if the number is smaller than 0, it will regard it as 0
+I1 = rgb2gray( I );
+figure(3)
+imhist ( I1 )
+level1 = graythresh ( I );
+level2 = 80 / 255;
+g1 = im2bw( I , level1 );
+g2 = im2bw( I , level2 );
+ylabel('Number of points')
+figure(4)
+subplot(1,2,1)
+imshow( g1 )
+title('Original image(threshold=125)')
+subplot(1,2,2)
+imshow( g2 )
+title('New image(threshold=80)')
+
+figure(5)
+subplot(1,2,1)
+imagesc( g1 )
+title('Original image(threshold=125)')
+subplot(1,2,2)
+imagesc( g2 )
+title('New image(threshold=80)')
+% I2=(I>New_Threshold imagesc)
+disp(strcat('The default threshold value: ',num2str(uint8(level1*255))))
+disp(strcat('New threshold value:',num2str(uint8(level2*255))))
+imwrite( g2 , 'coinbw.png')
+%----------excerise 3------------
+im = imread( 'Emu Image.jpg' );
+figure(6)
+imshow(im)
+%im_rgb = ind2rgb ( X , map );
+im2 = (im(:,:,1)+im(:,:,2)+im(:,:,3))/3;
+figure(7)
+imshow(im2)
+level3 = graythresh ( im );
+g3 = im2bw( im , level3 );
+figure(8)
+imshow( g3 )
+%----------excerise 4------------
+mytest('coins.png')
