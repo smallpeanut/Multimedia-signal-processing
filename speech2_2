@@ -1,0 +1,148 @@
+clear
+clc
+[s , f] = audioread('Male16k-2017.wav'); %to get the origin signal
+tf = 0.02; %Sampling time (should not be larger than 30ms)
+N = tf * f; %the length of each frame
+LPC_num_frames = ceil(length (s) / N );  % Number of frames for LPC
+pad = LPC_num_frames * N - length(s); %to get the number of zeros
+s = [s ; zeros(pad,1)]; %to add zeros in order to make the frame number is an integer
+buffer = reshape (s , N, LPC_num_frames)';  %to put the voice signal into frames
+p = 18; %the LPC order
+newSign = []; %this is to record the new voice signal after using LPC
+LPC_coef = []; %this is to record the linear prediction coefficient of each frame
+all_LPC_res = []; %this is to record the linear prediction residual signal of each frame
+res_output = [];%also the residual signals, but in one row
+
+Z = zeros(p , 1);% Set the initial conditions of the filter
+for i = 1 : LPC_num_frames
+    %this loop is to calculate the linear
+    %prediction coefficient and residual signal
+    [one_coef , ~] = lpc(buffer(i , : ) , p); % to get the linear prediction coefficient
+    LPC_coef = [LPC_coef ; one_coef]; %record the linear prediction coefficient of each frame
+    [LPC_res , Z] = filter(one_coef , 1 , buffer(i , : ) , Z); % Find the residual 'LPC_res'
+    all_LPC_res = [all_LPC_res ; LPC_res]; %record the linear prediction residual signal of each frame
+    res_output = [res_output LPC_res]; %record the residual signals, but in one row
+end
+
+Z = zeros(p , 1);% Reset the initial conditions of the filter
+for i = 1 : LPC_num_frames
+    [LPC_synth_sig , Z] = filter(1 , LPC_coef(i , : ) , all_LPC_res(i , : ) , Z);% Find the synthesised speech signal,
+    newSign = [newSign LPC_synth_sig];
+end
+audiowrite('NewMale16k-2017.wav',newSign,f); % write out the synthesised speech
+
+figure(1) %output figure(1)
+%subplot(2,1,1) %the first picture
+hold on;
+plot(audioread('Male16k-2017.wav')) %output the origin signal
+title('Original voice signal') %the title
+%subplot(2,1,2) %the second picture
+plot(res_output) %output the residual signal
+title('The residual signal') %the title
+hold off;
+%implement a LTP
+M_range = 32 : 294;
+L = 40; % LTP frame size
+
+%res_output = res_output';
+%LTP_res = LTP_res(:)';
+% number of LTP Frames
+LTP_num_f = ceil(length ( res_output ) / L);
+
+% padding the beginning with zeros since moving M backwards
+LTP_pad = ceil(max ( M_range ) / L);
+
+% initialise the variables to store stuff
+res_output = [ zeros( 1 , L * LTP_pad ) res_output ];
+LTP_excitation = zeros( 1 , length( res_output ) );
+LTP_lamda = zeros(1 , LTP_num_f);
+LTP_M = zeros(1 , LTP_num_f);
+best_M = zeros(1 ,LTP_num_f);
+best_lambda = zeros(1 , LTP_num_f);
+
+for i = LTP_pad + 1 : LTP_num_f + LTP_pad - 1 ;
+    % These temporarly hold the lambda and E(M) so what we can find the M
+    % which gives the smallest E(M)
+    temp_lambda = zeros( 1 , length( M_range ) );
+    temp_E = zeros( 1 , length( M_range ) );
+    
+    % Calculate M
+    % Find the smallest temp_E
+    for M = M_range
+        lambda_up = 0;
+        lambda_down = 0;
+        for n = 1 : L
+            lambda_up = lambda_up + res_output( (i - 1) * L + n) * res_output( (i - 1) * L + n - M);
+            lambda_down = lambda_down + (res_output((i-1)*L+n-M))^2;
+            % add your own codes
+        end
+        if lambda_down == 0
+            temp_lambda(M - min( M_range ) + 1) = 0;
+        else
+            temp_lambda(M - min( M_range ) + 1) = lambda_up / lambda_down;
+        end
+        for n = 1 : L
+            temp_E(M - min( M_range ) + 1) = temp_E(M - min( M_range ) + 1) + (res_output( (i - 1) * L + n) - temp_lambda(M - min( M_range ) + 1) * res_output( (i - 1) * L + n - M) ) ^ 2;
+        end
+    end
+    [~ , index_M] = min(temp_E);
+    best_M(i - LTP_pad) = index_M + min(M_range) - 1;
+    best_lambda(i - LTP_pad) = temp_lambda(index_M);
+end
+%
+% save('LTP_result')
+load('LTP_result')
+
+excitation = []; % ready to save the excitation signal
+LTP_res = []; 
+for i = LTP_pad : LTP_num_f + LTP_pad - 1 % loop from no-zero frame
+    P = [1 , zeros(1 , best_M(i - LTP_pad + 1) - 1)];
+    P = [P , -best_lambda(i - LTP_pad + 1)]; % to calculate the filter molecules
+    LTP_exci = filter(P , 1 , res_output(i*L -best_M(i - LTP_pad + 1) + 1 : (i + 1) * L)); % get the LTP excitation signal
+    excitation = [excitation LTP_exci(end - L + 1 : end)]; % to save LTP excitation of every frame
+    LTP_res_frame = filter(1 , P , LTP_exci);
+    LTP_res = [LTP_res , LTP_res_frame(end - L+1 : end)];
+end
+excitation = [zeros(1 , L * LTP_pad) excitation];
+
+figure(1)
+hold on;
+plot(all_LPC_res(80, : ))
+plot(excitation(80 * 320+1 : 81 * 320))
+title('The excitation signal and residual signal in 81th frame')
+legend('residual signal','excitation signal')
+
+err_signal = res_output(L * LTP_pad + 1 : end) - LTP_res;
+figure(2)
+plot(err_signal)
+title('error of LPC-residual signal and LTP-residual signal')
+
+figure(3)
+hold on
+plot(audioread('Male16k-2017.wav'),'b')
+plot(res_output(LTP_pad * L + 1 : end),'g')
+plot(excitation,'r')
+title('The speech signal, original residual signal and excitation signal')
+legend('The speech signal','The original residual signal','excitation signal')
+
+%LTP_res = [zeros(1,L*LTP_pad) LTP_res];
+reshape_error = reshape(err_signal,LPC_num_frames, N);
+reshape_LTP_res = reshape_error + all_LPC_res;
+LTP_recreate = [];
+
+Z = zeros(p , 1);% Reset the initial conditions of the filter
+for i = 1 : LPC_num_frames
+    [LPC_synth_sig , Z] = filter(1 , LPC_coef(i , : ) , reshape_LTP_res(i , : ) , Z);% Find the synthesised speech signal,
+    LTP_recreate = [LTP_recreate LPC_synth_sig];
+end
+audiowrite('LTP_NewMale16k-2017.wav' , LTP_recreate , f); % write out the synthesised speech
+figure(4)
+hold on
+plot( audioread( 'Male16k-2017.wav' ) )
+plot( LTP_recreate )
+legend('The original speech signal' , 'The LTP recreate signal')
+title('The output of original signal and recreat signal')
+
+figure(5)
+plot( audioread('Male16k-2017.wav')' - LTP_recreate(1 : length (audioread( 'Male16k-2017.wav' ) ) ) )
+title('The error between original signal and recreat signal')
