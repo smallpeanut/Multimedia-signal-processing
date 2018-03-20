@@ -1,0 +1,146 @@
+clear
+clc
+[s , f] = audioread( 'Female16k-2017.wav' ); % to get the origin signal
+tf = 0.02; % Sampling time (should not be larger than 30ms)
+N = tf * f; % the length of each frame
+LPC_num_frames = ceil( length (s) / N );  % Number of frames for LPC
+pad = LPC_num_frames * N - length(s); % to get the number of zeros
+s = [s ; zeros(pad,1)]; % to add zeros in order to make the frame number is an integer
+buffer = reshape (s , N, LPC_num_frames)';  % to put the voice signal into frames
+p = 18; % the LPC order
+newSign = []; % this is to record the new voice signal after using LPC
+LPC_coef = []; % this is to record the linear prediction coefficient of each frame
+all_LPC_res = []; % this is to record the linear prediction residual signal of each frame
+res_output = [];% also the residual signals, but in one row
+
+Z = zeros(p,1);% Set the initial conditions of the filter
+for i = 1 : LPC_num_frames 
+    % this loop is to calculate the linear 
+    % prediction coefficient and residual signal
+    [one_coef , ~] = lpc(buffer(i,:),p); % to get the linear prediction coefficient
+    LPC_coef = [LPC_coef;one_coef]; % record the linear prediction coefficient of each frame
+    [LPC_res , Z] = filter(one_coef , 1 , buffer(i , : ) , Z); % Find the residual 'LPC_res'
+    all_LPC_res = [all_LPC_res ; LPC_res]; % record the linear prediction residual signal of each frame
+    res_output = [res_output LPC_res]; % record the residual signals, but in one row
+end
+
+Z = zeros(p , 1);% Reset the initial conditions of the filter
+for i = 1 : LPC_num_frames
+    [LPC_synth_sig , Z] = filter(1 , LPC_coef(i , : ) , all_LPC_res(i , : ) , Z);% Find the synthesised speech signal,
+    newSign = [newSign LPC_synth_sig];
+end
+audiowrite('NewFemale16k-2017.wav' , newSign , f); % write out the synthesised speech
+
+figure(1) % output figure(1)
+% subplot(2,1,1) % the first picture
+hold on;
+plot(audioread('Female16k-2017.wav')) % output the origin signal
+title('Original voice signal') %the title
+% subplot(2,1,2) %the second picture
+plot(res_output) %output the residual signal
+title('The residual signal') %the title
+hold off;
+
+%Question 2
+framesNum = 4; %the frame number
+new_buffer_18700 = s(18700:18700 + (N*framesNum) - 1,1); %get signal by cutting the origin signal
+buffer_18700 = reshape (new_buffer_18700 , N, framesNum)'; %put these signal into frames
+aa_18700 = []; %this is to record the linear prediction coefficient of each frame
+all_LPC_res_18700 = []; %this is to record the linear prediction residual signal of each frame
+res_output_18700 = []; %also the residual signals, but in one row
+
+Z = zeros(p,1);% Set the initial conditions of the filter
+for i = 1:framesNum
+    %this loop is to calculate the linear prediction 
+    %coefficient and residual signal of 4 frames
+    [one_coef , ~] = lpc(buffer_18700(i , : ),p); % to get the linear prediction coefficient
+    aa_18700 = [aa_18700;one_coef];%record the linear prediction coefficient of each frame
+    [LPC_res , Z] = filter(one_coef , 1 , buffer_18700(i , : ) , Z); % Find the residual 'LPC_res'
+    all_LPC_res_18700 = [all_LPC_res_18700 ; LPC_res]; %record the linear prediction residual signal of each frame
+    res_output_18700 = [res_output_18700 LPC_res]; %record the residual signals, but in one row
+end
+figure(2) %output figure(2)
+%subplot(2,1,1)
+hold on %use voerlay
+plot(new_buffer_18700') %output the origin signal
+title('Voiced(4 frames begin with 18700)') %title name
+%subplot(2,1,2)
+plot(res_output_18700) %output the residual signal
+%title('The residual signal')
+hold off %put hold into off
+
+%Question 3
+framesNum = 4; %the frame number
+new_buffer_11600 = s(11600:11600 + (N*framesNum) - 1,1);
+buffer_11600 = reshape (new_buffer_11600 , N, framesNum)'; 
+aa_11600 = []; %this is to record the linear prediction coefficient of each frame
+all_LPC_res_11600 = []; %this is to record the linear prediction residual signal of each frame
+res_output_11600 = []; %also the residual signals, but in one row
+
+Z = zeros(p , 1);% Set the initial conditions of the filter
+for i = 1 : framesNum 
+    %this loop is to calculate the linear prediction 
+    %coefficient and residual signal of 4 frames
+    [one_coef , ~] = lpc(buffer_11600(i , : ) , p); % to get the linear prediction coefficient
+    aa_11600 = [aa_11600 ; one_coef]; %record the linear prediction coefficient of each frame
+    [LPC_res , Z] = filter(one_coef , 1 , buffer_11600(i , : ) , Z); % Find the residual 'LPC_res'
+    all_LPC_res_11600 = [all_LPC_res_11600 ; LPC_res]; %record the linear prediction residual signal of each frame
+    res_output_11600 = [res_output_11600 LPC_res]; %record the residual signals, but in one row
+end
+
+figure(3) %output figure(3)
+%subplot(2,1,1)
+hold on %use voerlay
+plot(new_buffer_11600') %output the origin signal
+title('Unvoiced(4 frames begin with 11600)') %output title
+%subplot(2,1,2)
+plot(res_output_11600) %output the residual signal
+%title('The residual signal')
+hold off %put hold into off
+
+%Question 4
+errorSignal = s' - newSign; %to get the errorSignal
+figure(4) %output figure(3)
+plot(errorSignal) %output the erro signal 
+title('The error signal') %title name
+
+%Addition question
+Hamm = hamming(N); % create Hamming window
+Music_source = s';
+originAll = [];
+for i = 1:2*LPC_num_frames - 1
+    origin = Music_source(((LPC_num_frames - 1) * (N / 2) + 1):((LPC_num_frames - 1) * (N / 2) + N));
+    origin = origin .* Hamm';
+    originAll = [originAll ; origin];
+end
+for i = 1 : LPC_num_frames
+    [one_coef , ~] = lpc(originAll(i , : ) , p); % Replace with your chosen LPC function
+    LPC_coef = [LPC_coef ; one_coef];
+    
+    [LPC_res , Z] = filter(one_coef , 1 , originAll(i , : ) , Z);% Find the residual, LPC_res, by
+    all_LPC_res = [all_LPC_res ; LPC_res];
+    res_output = [res_output LPC_res];
+end
+
+res_output = res_output(1 , 1 : length(Music_source));
+Z = zeros(p , 1);% Reset the initial conditions of the filter
+
+for i = 1 : LPC_num_frames
+    [LPC_synth_sig , Z] = filter(1,LPC_coef(i , : ) ,all_LPC_res(i , : ) , Z);% Find the synthesised speech signal,
+    newSign = [newSign LPC_synth_sig];
+%audiowrite('NewFemale16k-2017.wav',newSign,fs); % write out the synthesised speech
+end
+newSign = newSign(1,1 : length(Music_source));
+
+figure(5)
+%subplot(2,1,1)
+hold on;
+plot(Music_source)
+title('Original voice signal')
+%subplot(2,1,2)
+plot(res_output)
+title('The residual signal')
+hold off;
+figure(6)
+errorSignal1 = Music_source - newSign;
+plot(errorSignal1)
