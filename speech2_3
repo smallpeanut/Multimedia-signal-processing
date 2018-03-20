@@ -1,0 +1,178 @@
+clear
+clc
+
+[s_origin,fs] = audioread('Male16k-2017.wav');
+s_0dB = audioread('Male16k-noisy0dB.wav');
+s_10dB = audioread('Male16k-noisy10dB.wav');
+s_20dB = audioread('Male16k-noisy20dB.wav');
+
+tf = 0.02; %Sampling time (should not be larger than 30ms)
+N = tf * fs; %the length of each frame
+fft_N = 2^9;
+LPC_num_frames = ceil(length (s_origin) / N );  % Number of frames for LPC
+pad = LPC_num_frames * N - length( s_origin ); % to get the number of zeros
+s_origin = [s_origin ; zeros(pad , 1)]; % to add zeros in order to make the frame number is an integer
+s_0dB = [s_0dB ; zeros(pad , 1)]; % to add zeros in order to make the frame number is an integer
+s_10dB = [s_10dB ; zeros(pad , 1)]; % to add zeros in order to make the frame number is an integer
+s_20dB = [s_20dB ; zeros(pad , 1)]; % to add zeros in order to make the frame number is an integer
+%buffer = reshape (s , N, LPC_num_frames)';  % to put the voice signal into frames
+p = 20; % the LPC order
+%-------------50% overlaping Hamming-----------
+Hamm = hamming(N); % create Hamming window
+s_origin = s_origin';
+s_0dB = s_0dB';
+s_10dB = s_10dB';
+s_20dB = s_20dB';
+
+hamming_origin = [];
+hamming_0dB = [];
+hamming_10dB = [];
+hamming_20dB = [];
+for i = 1 : 2 * LPC_num_frames - 1
+    origin = s_origin(((i - 1) * (N / 2) + 1):((i - 1) * (N / 2) + N));
+    origin = origin .* Hamm';
+    if i == 1
+        hamming_origin = [hamming_origin , origin( 1 : 3 * (N / 4) )];
+    elseif i == 2 * LPC_num_frames - 1
+        hamming_origin = [hamming_origin , origin( (N / 4) + 1 : end )];
+    else
+        hamming_origin = [hamming_origin , origin( (N / 4) + 1 : 3 * (N / 4) )];
+    end
+    
+    origin = s_0dB(((i - 1) * (N / 2) + 1) : ((i - 1) * (N / 2) + N));
+    origin = origin .* Hamm';
+    if i == 1
+        hamming_0dB = [hamming_0dB , origin(1 : 3 * (N / 4) )];
+    elseif i == 2 * LPC_num_frames - 1
+        hamming_0dB = [hamming_0dB , origin( (N / 4) + 1 : end )];
+    else
+        hamming_0dB = [hamming_0dB , origin( (N / 4) + 1 : 3 * (N / 4) )];
+    end
+    
+    origin = s_10dB( ( (i - 1) * (N / 2) + 1) : ((i - 1) * (N / 2) + N));
+    origin = origin .* Hamm';
+    if i == 1
+        hamming_10dB = [hamming_10dB , origin(1 : 3 * (N / 4) )];
+    elseif i == 2 * LPC_num_frames - 1
+        hamming_10dB = [hamming_10dB , origin( (N / 4) + 1 : end )];
+    else
+        hamming_10dB = [hamming_10dB , origin( (N / 4) + 1 : 3 * (N / 4) )];
+    end
+    
+    origin = s_20dB(((i - 1) * (N / 2) + 1) : ((i - 1) * (N / 2) + N));
+    origin = origin .* Hamm';
+    if i == 1
+        hamming_20dB = [hamming_20dB , origin(1 : 3 * (N / 4))];
+    elseif i == 2 * LPC_num_frames - 1
+        hamming_20dB = [hamming_20dB , origin( (N / 4) + 1 : end )];
+    else
+        hamming_20dB = [hamming_20dB , origin( (N / 4) + 1 : 3 * (N / 4) )];
+    end
+
+end
+
+reshape_s_origin = reshape(hamming_origin , N , LPC_num_frames)';
+reshape_s_0dB = reshape(hamming_0dB , N , LPC_num_frames)';
+reshape_s_10dB = reshape(hamming_10dB , N , LPC_num_frames)';
+reshape_s_20dB = reshape(hamming_20dB , N , LPC_num_frames)';
+
+fft_origin = fftshift (fft (start_origin , fft_N) );
+fft_0dB =fftshift (fft (start_0dB , fft_N) );
+fft_10dB = fftshift (fft (start_10dB , fft_N) );
+fft_20dB = fftshift (fft (start_20dB , fft_N) );
+%-------------------LPC-------------------
+[coef_origin , ~] = lpc(start_origin , p);
+[coef_0dB , ~] = lpc(start_0dB , p);
+[coef_10dB , ~] = lpc(start_10dB , p);
+[coef_20dB , ~] = lpc(start_20dB , p);
+
+[H1 , F1] = freqz(1 , coef_origin , fft_N , fs); % plot the LPC magnitude spectrum. Note that other
+[H2 , F2] = freqz(1 , coef_0dB , fft_N , fs); % plot the LPC magnitude spectrum. Note that other
+[H3 , F3] = freqz(1 , coef_10dB , fft_N , fs); % plot the LPC magnitude spectrum. Note that other
+[H4 , F4] = freqz(1 , coef_20dB , fft_N , fs); % plot the LPC magnitude spectrum. Note that other
+
+fft_coef_origin = fftshift( fft( coef_origin , fft_N ) );
+fft_coef_0dB = fftshift( fft( coef_0dB , fft_N ) );
+fft_coef_10dB = fftshift( fft( coef_10dB , fft_N ) );
+fft_coef_20dB = fftshift( fft( coef_20dB , fft_N ) );
+
+dB_origin = 20 * log10( abs( fft_origin( fft_N / 2 + 1 : end) ) ./ mean( abs( fft_origin( fft_N / 2 + 1 : end ) ) ) );
+dB_0dB = 20 * log10( abs( fft_0dB( fft_N / 2 + 1 : end) ) ./ mean( abs( fft_0dB( fft_N / 2 + 1 : end ) ) ) );
+dB_10dB = 20 * log10( abs( fft_10dB( fft_N / 2 + 1 : end) ) ./ mean( abs( fft_10dB( fft_N / 2 + 1 : end ) ) ) );
+dB_20dB = 20 * log10( abs( fft_20dB( fft_N / 2 + 1 : end) ) ./ mean( abs( fft_20dB( fft_N/2 + 1 : end ) ) ) );
+
+dB_coef_origin = -20 * log10( abs( fft_coef_origin( fft_N / 2 + 1 : end ) ) ./ mean( abs( fft_coef_origin( fft_N / 2 + 1 : end ) ) ) );
+dB_coef_0dB = -20 * log10( abs( fft_coef_0dB( fft_N / 2 + 1 : end ) ) ./ mean( abs( fft_coef_0dB( fft_N / 2 + 1 : end ) ) ) );
+dB_coef_10dB = -20 * log10( abs( fft_coef_10dB( fft_N / 2 + 1 : end ) )./mean( abs( fft_coef_10dB( fft_N / 2 + 1 : end ) ) ) );
+dB_coef_20dB = -20 * log10( abs( fft_coef_20dB( fft_N / 2 + 1 : end ) )./mean( abs( fft_coef_20dB( fft_N / 2 + 1 : end ) ) ) );
+
+%-------------------plot------------------
+figure(1)
+subplot(2 , 2 , 1)
+hold on
+plot(start_origin)
+title('Origin Signal')
+%plot(x_range,-20*log(abs(fft_coef_origin(fft_N/2+1:end))))
+subplot(2 , 2 , 4)
+hold on
+plot(start_0dB)
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=0dB')
+subplot(2 , 2 , 3)
+hold on
+plot(start_10dB)
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=10dB')
+subplot(2 , 2 , 2)
+hold on
+plot(start_20dB)
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=20dB')
+
+figure(2)
+subplot(2 , 2 , 1)
+hold on
+plot(x_range , dB_origin)
+plot(F1 , 20 * log10( abs( H1 ) / mean( abs( H1 ) ) ) )
+title('Origin Signal')
+%plot(x_range,-20*log(abs(fft_coef_origin(fft_N/2+1:end))))
+subplot(2,2,4)
+hold on
+plot(x_range,dB_0dB)
+plot(F2 , 20 * log10( abs( H2 ) / mean( abs( H2 ) ) ) )
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=0dB')
+subplot(2,2,3)
+hold on
+plot(x_range , dB_10dB)
+plot(F3 , 20 * log10( abs( H3 ) / mean( abs( H3 ) ) ) )
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=10dB')
+subplot(2 , 2 , 2)
+hold on
+plot(x_range , dB_20dB)
+plot(F4 , 20 * log10( abs( H4 ) / mean( abs( H4 ) ) ) )
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=20dB')
+
+figure(3)
+subplot(2 , 2 , 1)
+hold on
+plot(s_origin)
+title('Origin Signal')
+%plot(x_range,-20*log(abs(fft_coef_origin(fft_N/2+1:end))))
+subplot(2 , 2 , 4)
+hold on
+plot(s_0dB)
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=0dB')
+subplot(2 , 2 , 3)
+hold on
+plot(s_10dB)
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=10dB')
+subplot(2 , 2 , 2)
+hold on
+plot(s_20dB)
+%plot(x_range,-20*log(abs(fft_coef_0dB(fft_N/2+1:end))))
+title('SNR=20dB')
